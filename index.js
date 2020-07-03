@@ -1,20 +1,8 @@
 #!/usr/bin/env node
 
 const chalk = require("chalk");
-const boxen = require("boxen");
 const inquirer = require("inquirer");
-const cheerio = require("cheerio");
-const got = require("got");
-
-const boxenOptions = {
-  padding: 1,
-  margin: 1,
-  borderStyle: "single",
-  borderColor: "green",
-  align: "center",
-  dimBorder: true,
-  float: "center",
-};
+const { spawn } = require("child_process");
 
 accentsTidy = function (s) {
   var r = s.toLowerCase();
@@ -33,67 +21,87 @@ accentsTidy = function (s) {
   return r;
 };
 
-inquirer
-.prompt([
-    {
-    type: "input",
-    name: "word",
-    message: "Palavra:",
-    },
-])
-.then((answers) => {
-    var word = answers.word;
-    getResponses(word);
-})
-.catch((error) => {
-    if (error.isTtyError) {
-    // Prompt couldn't be rendered in the current environment
-    } else {
-    // Something else when wrong
-    }
-});
+function option(url, uses) {
+  this.url = url;
+  this.uses = uses;
+}
 
+function getResponses(word, opt) {
+  const priberamURL = new option("https://dicionario.priberam.org/" + word, [
+    "Definição",
+  ]);
+  const infopediaURL = new option(
+    "https://www.infopedia.pt/dicionarios/lingua-portuguesa/" + word,
+    ["Definição"]
+  );
+  const sinonimosURL = new option(
+    "https://www.sinonimos.com.br/" + accentsTidy(word),
+    ["Sinónimos"]
+  );
+  const informalURL = new option(
+    "https://www.dicionarioinformal.com.br/" + word,
+    ["Rimas", "Sinónimos", "Antónimos", "Definição"]
+  );
 
-var getResponses = function (word) {
-    function option(url, name, string) { 
-        this.url = url; 
-        this.name = name; 
-        this.string = string;
-     } 
-  const priberamURL = new option("https://dicionario.priberam.org/" + word, "PRIBERAM", "#resultados");
-  const infopediaURL = new option("https://www.infopedia.pt/dicionarios/lingua-portuguesa/" + word, "INFOPEDIA", ".QuadroDefinicao");
-  const sinonimosURL = new option("https://www.sinonimos.com.br/" + accentsTidy(word), "SINONIMOS", ".palavra-small");
-  const informalURL = new option("https://www.dicionarioinformal.com.br/" + word, "INFORMAL");
+  var list = [priberamURL, infopediaURL, sinonimosURL, informalURL];
 
-  var list = [priberamURL,infopediaURL,sinonimosURL];
+  var selection = new Set();
 
-  list.forEach(element => {
-    got(element.url)
-    .then((response) => {
-      const $ = cheerio.load(response.body);
-
-      var string = $(element.string)
-        .text()
-        .replace(/([\s\S])* Experimente!/, "")
-        .replace( /[0-9]./g, "")
-        .replace("SINÓNIMOS", "\nSINÓNIMOS\n")
-        .replace("ANTÓNIMOS", "\nANTÓNIMOS\n")
-        .replace(/\n+/g, "\n")
-        .replace(/([\s\S])* Compartilhar/, "")
-        .replace(/\./g, "\n")
-        .replace(/:/g, "\n")
-        .replace(/\n+/g, "\n")
-        .trim()
-        .toString();
-
-      const chalk_string = chalk.white(element.name + "\n\n" + string);
-
-      const msgBox = boxen(chalk_string, boxenOptions);
-
-      console.log(msgBox);
-    })
-    .catch((err) => {
-      console.log(err);
+  list.forEach((element) => {
+    opt.forEach((optss) => {
+      if (element.uses.indexOf(optss) > -1) {
+        selection.add(element.url);
+      }
     });
   });
+
+  if (selection.size == 0) return;
+
+  const ls = spawn("chromium", ["--new-window"].concat([...selection]));
+
+  // ls.stdout.on("data", (data) => {
+  //   console.log(`stdout: ${data}`);
+  // });
+
+  ls.on("close", (code) => {
+    if (code != 0) console.log(`child process exited with code ${code}`);
+  });
+
+  return ls;
 }
+function repeatable() {
+  var process;
+
+  inquirer
+    .prompt([
+      {
+        type: "input",
+        name: "word",
+        message: chalk.green("Palavra:"),
+      },
+      {
+        type: "checkbox",
+        name: "option",
+        message: "Pesquisar por:",
+        choices: ["Definição", "Sinónimos", "Antónimos", "Rimas"],
+      },
+    ])
+    .then((answers) => {
+      var word = answers.word;
+      process = getResponses(word, answers.option);
+    })
+    .catch((error) => {
+      if (error.isTtyError) {
+        // Prompt couldn't be rendered in the current environment
+        console.log("ERROR Tty");
+      } else {
+        // Something else when wrong
+        console.log("ERROR", error);
+      }
+    })
+    .finally(() => {
+      repeatable();
+    });
+}
+
+repeatable();

@@ -6,15 +6,12 @@
   "scripts": {},
   "author": "",
   "license": "ISC",
+  "preferGlobal": true,
   "bin": {
-    "cli-pt": "./bin/index.js"
+    "clipt": "index.js"
   },
   "dependencies": {
-    "axios": "^0.19.2",
-    "boxen": "^4.0.0",
     "chalk": "^2.4.2",
-    "cheerio": "^1.0.0-rc.3",
-    "got": "^11.3.0",
     "inquirer": "^7.3.0"
   }
 }
